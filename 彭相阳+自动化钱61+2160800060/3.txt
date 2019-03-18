@@ -1,0 +1,367 @@
+#include <cv.h>
+#include <highgui.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+
+using namespace std;
+using namespace cv;
+
+void drawHist(Mat image,int isSave,string name="drawHist.bmp")
+{
+	Mat_<Vec3b> img = image;
+	int row = image.rows;
+	int col = image.cols;
+	int grayNum[256] = { 0 };
+	//统计直方图
+	for (int i=0;i<row;i++)
+	{
+		for(int j=0;j<col;j++)
+		{
+			grayNum[img(i,j)[0]]=grayNum[img(i,j)[0]]+1;
+		}
+	}
+	//画直方图
+	double maxVal = 0;
+	int i = 0;
+	while (1)
+	{
+		if (i > 255)
+			break;
+		if (grayNum[i] > maxVal)
+			maxVal = grayNum[i];
+		i++;
+	}
+ 
+	int bin_num = 256; 							// [0,255]共256个bin
+	Mat histImg(bin_num, bin_num, CV_8U, Scalar(255)); 			//生成白色画布(255)
+	int hpt = static_cast<int>(0.9*bin_num); 
+
+	for (int i = 0; i<bin_num; i++){
+		int binVal = grayNum[i];
+		int intensity = static_cast<int>(binVal*hpt / maxVal);  	// 个数转化为长度，同样上面的灰度值也可以转化为长度
+		line(histImg, Point(i, bin_num),
+			Point(i, bin_num - intensity),Scalar::all(0));		//两点之间绘制一条线
+	}
+	imshow("histogram", histImg);
+	waitKey(0);
+    	//存储
+	if(isSave==1)
+	{
+		imwrite(name,histImg);
+	}
+}
+
+void histEqua(Mat image,int isSave,string name="histEqua.bmp")
+{
+	Mat_<Vec3b> img = image;
+	int row = image.rows;
+	int col = image.cols;
+	int grayLevel=256;
+	int grayNum[grayLevel-1] = { 0 };
+	int grayFun[grayLevel-1] = {0};//灰度映射函数
+	float k = ((float)grayLevel-1)/(float)row/(float)col;
+	//统计直方图
+	for (int i=0;i<row;i++)
+	{
+		for(int j=0;j<col;j++)
+		{
+			grayNum[img(i,j)[0]]=grayNum[img(i,j)[0]]+1;
+		}
+	}
+	//建立映射关系
+	int temp=0;
+	for(int i=0;i<grayLevel;i++)
+	{
+		temp+=grayNum[i];
+		grayFun[i]=static_cast<int>(k*temp+0.5);
+	}
+	//实现直方图均衡
+	int oldGray;
+	for (int i=0;i<row;i++)
+	{
+		for(int j=0;j<col;j++)
+		{
+			oldGray=image.at<Vec3b>(i, j)[0];
+			image.at<Vec3b>(i, j)[0]=grayFun[oldGray];
+			image.at<Vec3b>(i, j)[1]=grayFun[oldGray];
+			image.at<Vec3b>(i, j)[2]=grayFun[oldGray];
+		}
+	}
+	cout<<grayFun;
+	imshow( "histEqua Image", image);
+    	waitKey(0);
+    	//存储
+	if(isSave==1)
+	{
+		imwrite(name,image);
+	}
+}
+
+void histMatch(Mat image,Mat model,int isSave,string name="histMatch.bmp")
+{
+	Mat_<Vec3b> img = image;
+	Mat_<Vec3b> mdl = model;
+	
+	int row = image.rows;
+	int col = image.cols;
+	
+	int rowM = model.rows;
+	int colM = model.cols;
+	
+	int grayLevel=256;
+	
+	int grayNum[grayLevel-1] = { 0 };
+	int grayNumM[grayLevel-1] = { 0 };
+	int grayFun[grayLevel-1] = {0};						//待匹配图像灰度映射函数
+	int grayFunM[grayLevel-1] = {0};					//模板图像灰度映射函数
+	int GrayFun[grayLevel-1] = {0};						//灰度映射函数
+	
+	float k = ((float)grayLevel-1)/(float)row/(float)col;
+	float kM = ((float)grayLevel-1)/(float)rowM/(float)colM;
+	//统计待匹配图像直方图
+	for (int i=0;i<row;i++)
+	{
+		for(int j=0;j<col;j++)
+		{
+			grayNum[img(i,j)[0]]=grayNum[img(i,j)[0]]+1;
+		}
+	}
+	//统计模板图像直方图
+	for (int i=0;i<rowM;i++)
+	{
+		for(int j=0;j<colM;j++)
+		{
+			grayNumM[mdl(i,j)[0]]=grayNumM[mdl(i,j)[0]]+1;
+		}
+	}
+	//建立待匹配图像映射关系
+	int temp=0;
+	for(int i=0;i<grayLevel;i++)
+	{
+		temp+=grayNum[i];
+		grayFun[i]=static_cast<int>(k*temp+0.5);
+	}
+	//建立模板图像映射关系
+	temp=0;
+	for(int i=0;i<grayLevel;i++)
+	{
+		temp+=grayNumM[i];
+		grayFunM[i]=static_cast<int>(kM*temp+0.5);
+	}
+	//建立灰度映射关系
+	for(int i=0;i<grayLevel;i++)
+	{
+		int s=grayFun[i];
+		int dis=grayLevel;
+		int temp=0;
+		for(int j=0;j<grayLevel;j++)
+		{
+			if(grayFunM[j]-s<dis)
+			{
+				dis=abs(grayFunM[j]-s);
+				temp=j;
+			}
+			else
+			{
+				if(grayFunM[j]-s==dis)
+				{					
+				}
+				else
+				{
+					GrayFun[i]=temp;
+					break;
+					printf("%d ", GrayFun[i]);
+				}
+			}
+		}
+	}
+	//实现直方图匹配
+	int oldGray;
+	for (int i=0;i<row;i++)
+	{
+		for(int j=0;j<col;j++)
+		{
+			oldGray=image.at<Vec3b>(i, j)[0];
+			image.at<Vec3b>(i, j)[0]=GrayFun[oldGray];
+			image.at<Vec3b>(i, j)[1]=GrayFun[oldGray];
+			image.at<Vec3b>(i, j)[2]=GrayFun[oldGray];
+		}
+	}
+	imshow( "histMatch Image", image);
+    	waitKey(0);
+    	//存储
+	if(isSave==1)
+	{
+		imwrite(name,image);
+	}
+	
+}
+
+void localHistEqua(Mat image,int rowL,int colL,int isSave,
+			string name="localHistEqua.bmp")
+{
+	Mat_<Vec3b> img = image;
+	int row = image.rows;
+	int col = image.cols;
+	int grayLevel=256;
+	
+	if(rowL%2==0||colL%2==0)
+	{
+		printf( "incorrect parameter \n" );
+        	exit(0);
+	}
+	
+	for(int m=0;m<row;m++)
+	{
+		for(int n=0;n<col;n++)
+		{
+			int grayNum[grayLevel-1] = { 0 };
+			int grayFun[grayLevel-1] = {0};//灰度映射函数
+			float k = ((float)grayLevel-1)/(float)rowL/(float)colL;
+			//统计直方图
+			for (int i=0;i<rowL;i++)
+			{
+				for(int j=0;j<colL;j++)
+				{
+				int ii=m+i-(rowL-1)/2;
+				int jj=n+j-(colL-1)/2;
+				int index;
+				if(ii<0||ii>=row||jj<0||jj>=col)
+				{
+					index=0;
+				}
+				else
+				{
+					index=img(ii,jj)[0];
+				}
+				grayNum[index]=grayNum[index]+1;
+				}
+			}
+			//建立映射关系
+			int temp=0;
+			for(int i=0;i<grayLevel;i++)
+			{
+				temp+=grayNum[i];
+				grayFun[i]=static_cast<int>(k*temp+0.5);
+			}
+			//实现局部直方图均衡
+			int oldGray=image.at<Vec3b>(m, n)[0];
+			image.at<Vec3b>(m, n)[0]=grayFun[oldGray];
+			image.at<Vec3b>(m, n)[1]=grayFun[oldGray];
+			image.at<Vec3b>(m, n)[2]=grayFun[oldGray];
+		}
+	}
+	imshow( "localHistEqua Image", image);
+    	waitKey(0);
+    	//存储
+	if(isSave==1)
+	{
+		imwrite(name,image);
+	}
+}
+
+void histSeg(Mat image,int isSave,string name="histSeg.bmp")
+{
+	Mat_<Vec3b> img = image;
+	int row = image.rows;
+	int col = image.cols;
+	int grayLevel=256;
+	int grayNum[grayLevel-1] = { 0 };
+	//统计直方图
+	for (int i=0;i<row;i++)
+	{
+		for(int j=0;j<col;j++)
+		{
+			grayNum[img(i,j)[0]]=grayNum[img(i,j)[0]]+1;
+		}
+	}
+	//寻找阈值
+	int T=128,T0=1,temp=0;
+	while(abs(T-temp)>T0)
+	{
+		int mean1=0,mean2=0;
+		int N1=0,N2=0;
+		for(int i=0;i<grayLevel;i++)
+		{
+			if(i<T)
+			{
+				N1+=grayNum[i];
+				mean1+=grayNum[i]*i;
+			}
+			else
+			{
+				N2+=grayNum[i];
+				mean2+=grayNum[i]*i;
+			}			
+		}	
+		mean1=mean1/N1;
+		mean2=mean2/N2;
+		temp=T;
+		T=(mean1+mean2)/2;
+	}
+	//实现直方图分割
+	int oldGray;
+	for (int i=0;i<row;i++)
+	{
+		for(int j=0;j<col;j++)
+		{
+			oldGray=image.at<Vec3b>(i, j)[0];
+			if(oldGray<T)
+			{
+				image.at<Vec3b>(i, j)[0]=0;
+				image.at<Vec3b>(i, j)[1]=0;
+				image.at<Vec3b>(i, j)[2]=0;
+			}
+			else
+			{
+				image.at<Vec3b>(i, j)[0]=255;
+				image.at<Vec3b>(i, j)[1]=255;
+				image.at<Vec3b>(i, j)[2]=255;
+			}
+			
+		}
+	}
+	imshow( "histSeg Image", image);
+    	waitKey(0);
+    	//存储
+	if(isSave==1)
+	{
+		imwrite(name,image);
+	}
+	
+	
+}
+
+int main()
+{
+	string dir="/home/xyz/桌面/数字图像处理/作业/第3-次作业/";
+	string imgname[14]={"citywall","citywall1","citywall2","elain","elain1","elain2",
+			"elain3","lena","lena1","lena2","lena4","woman","woman1","woman2"};
+	for(int i=0;i<14;i++)
+	{
+	string file=dir+imgname[i]+".bmp";
+	string fileM="/home/xyz/桌面/数字图像处理/作业/第3-次作业/woman.bmp";
+    	
+    	Mat image=imread(file);
+    	Mat model=imread(fileM);
+	if(!image.data )
+    	{
+        	printf( "No image data \n" );
+        	return -1;
+    	}
+    	if(!model.data )
+    	{
+        	printf( "No model data \n" );
+        	return -1;
+    	}
+    	//imshow( "Display Image", image);
+    	//waitKey(0);    	
+
+	drawHist(image,1,imgname[i]+".bmp");
+	//histEqua(image,1,imgname[i]+".bmp");
+	//histMatch(image,model,1,"woman2.bmp");
+	//localHistEqua(image,7,7,1,"lena.bmp");
+	//histSeg(image,1,"elain.bmp");
+ 	}
+    	return 0;
+}
